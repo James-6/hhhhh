@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>生日快乐云云</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+            background: #000;
+            touch-action: none;
+        }
+        #fireworksCanvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            cursor: grab;
+        }
+        #fireworksCanvas:active {
+            cursor: grabbing;
+        }
+    </style>
+</head>
+<body>
+<canvas id="fireworksCanvas"></canvas>
+
+<script>
+// ===================== 核心配置 🎂 生日祝福专属 =====================
+const FIRST_TEXT = '生日快乐 云云'; // 第一发文字
+// 🔥 你指定的全新固定顺序文字
+const SEQUENCE_TEXTS = ['云云', '平安', '喜乐', '顺遂','生日快乐', '云云', '无忧', '开心', '幸福', '云云', '生日快乐'];
+let textIndex = 0; // 顺序索引
+let firstFireworkLaunched = false; // 标记第一发是否已发射
+
+// ===================== 核心变量定义 =====================
+const canvas = document.getElementById('fireworksCanvas');
+const ctx = canvas.getContext('2d');
+let canvasWidth = window.innerWidth;
+let canvasHeight = window.innerHeight;
+
+// 缩放与平移核心参数
+let scale = 1;
+let minScale = 0.5;
+let maxScale = 3;
+let panX = 0;
+let panY = 0;
+let isDragging = false;
+let lastX, lastY;
+let touches = [];
+let initialDistance;
+
+// 粒子与烟花数组
+let fireworks = [];
+let particles = [];
+
+// 初始化画布尺寸
+function resizeCanvas() {
+    canvasWidth = window.innerWidth;
+    canvasHeight = window.innerHeight;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// ===================== 工具函数 =====================
+function random(min, max) {
+    return Math.random() * (max - min) + min;
+}
+// 🔥 浪漫色系定制：无绿色！粉色/玫红/紫色/暖红/浅蓝 超浪漫
+function randomColor() {
+    const colorType = Math.floor(random(0, 5));
+    let r, g, b;
+    switch(colorType) {
+        case 0: // 粉色系
+            r = Math.floor(random(220, 255));
+            g = Math.floor(random(100, 180));
+            b = Math.floor(random(180, 240));
+            break;
+        case 1: // 玫红/暖红
+            r = Math.floor(random(200, 255));
+            g = Math.floor(random(50, 150));
+            b = Math.floor(random(150, 220));
+            break;
+        case 2: // 紫色系
+            r = Math.floor(random(160, 220));
+            g = Math.floor(random(80, 160));
+            b = Math.floor(random(200, 255));
+            break;
+        case 3: // 暖红
+            r = Math.floor(random(230, 255));
+            g = Math.floor(random(100, 160));
+            b = Math.floor(random(120, 180));
+            break;
+        case 4: // 浅蓝紫
+            r = Math.floor(random(140, 200));
+            g = Math.floor(random(160, 210));
+            b = Math.floor(random(220, 255));
+            break;
+    }
+    return `rgb(${r},${g},${b})`;
+}
+function getDistance(p1, p2) {
+    return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+}
+// 按顺序获取祝福文字
+function getSequenceText() {
+    const text = SEQUENCE_TEXTS[textIndex];
+    textIndex = (textIndex + 1) % SEQUENCE_TEXTS.length;
+    return text;
+}
+
+// ===================== 粒子类（全统一规格） =====================
+class Particle {
+    constructor(x, y, color, text) {
+        this.x = x;
+        this.y = y;
+        this.speed = random(1.5, 3);
+        this.angle = random(0, Math.PI * 2);
+        this.vx = Math.cos(this.angle) * this.speed;
+        this.vy = Math.sin(this.angle) * this.speed;
+        this.alpha = 1;
+        this.decay = random(0.003, 0.006);
+        this.color = color;
+        this.size = random(3, 5);
+        this.gravity = 0.02;
+        // 文字参数
+        this.text = text;
+        this.showText = false;
+        this.textAlpha = 0;
+        this.textDecay = 0.004;
+    }
+
+    update() {
+        this.vy += this.gravity;
+        this.x += this.vx;
+        this.y += this.vy;
+        this.alpha -= this.decay;
+
+        if (this.vy > 0 && !this.showText) {
+            this.showText = true;
+            this.textAlpha = 1;
+        }
+        if (this.showText) {
+            this.textAlpha -= this.textDecay;
+        }
+    }
+
+    draw() {
+        if (this.alpha <= 0) return;
+
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        if (this.showText && this.textAlpha > 0) {
+            ctx.save();
+            ctx.globalAlpha = this.textAlpha;
+            ctx.fillStyle = this.color;
+            ctx.font = `${18 * scale}px 微软雅黑`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(this.text, this.x, this.y);
+            ctx.restore();
+        }
+    }
+}
+
+// ===================== 烟花类（全统一规格，无差异化） =====================
+class Firework {
+    constructor(text) {
+        this.x = random(canvasWidth * 0.25, canvasWidth * 0.75);
+        this.y = canvasHeight;
+        this.targetX = random(canvasWidth * 0.25, canvasWidth * 0.75);
+        this.targetY = random(canvasHeight * 0.15, canvasHeight * 0.35);
+        this.speed = 4;
+        this.angle = Math.atan2(this.targetY - this.y, this.targetX - this.x);
+        this.color = randomColor();
+        this.finished = false;
+        this.text = text;
+    }
+
+    update() {
+        this.x += Math.cos(this.angle) * this.speed;
+        this.y += Math.sin(this.angle) * this.speed;
+
+        if (Math.abs(this.x - this.targetX) < 5 && Math.abs(this.y - this.targetY) < 5) {
+            this.finished = true;
+            this.createParticles();
+        }
+    }
+
+    createParticles() {
+        const count = 40;
+        for (let i = 0; i < count; i++) {
+            particles.push(new Particle(this.targetX, this.targetY, this.color, this.text));
+        }
+    }
+
+    draw() {
+        ctx.save();
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// ===================== 交互事件（完全保留） =====================
+canvas.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+});
+canvas.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    panX += dx;
+    panY += dy;
+    lastX = e.clientX;
+    lastY = e.clientY;
+});
+canvas.addEventListener('mouseup', () => isDragging = false);
+canvas.addEventListener('mouseleave', () => isDragging = false);
+
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const zoomIntensity = 0.1;
+    const zoom = e.deltaY > 0 ? -zoomIntensity : zoomIntensity;
+    const newScale = scale + zoom;
+    if (newScale >= minScale && newScale <= maxScale) scale = newScale;
+});
+
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    touches = Array.from(e.touches).map(t => ({x: t.clientX,y: t.clientY}));
+    if (touches.length === 2) initialDistance = getDistance(touches[0], touches[1]);
+    if (touches.length === 1) lastX = touches[0].x, lastY = touches[0].y;
+});
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    touches = Array.from(e.touches).map(t => ({x: t.clientX,y: t.clientY}));
+    if (touches.length === 2) {
+        const newDistance = getDistance(touches[0], touches[1]);
+        const scaleFactor = newDistance / initialDistance;
+        const newScale = scale * scaleFactor;
+        if (newScale >= minScale && newScale <= maxScale) scale = newScale;
+        initialDistance = newDistance;
+    }
+    if (touches.length === 1) {
+        const dx = touches[0].x - lastX;
+        const dy = touches[0].y - lastY;
+        panX += dx;
+        panY += dy;
+        lastX = touches[0].x;
+        lastY = touches[0].y;
+    }
+});
+canvas.addEventListener('touchend', () => touches = []);
+
+// ===================== 动画主循环 =====================
+function animate() {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(panX, panY);
+    ctx.scale(scale, scale);
+
+    fireworks = fireworks.filter(f => !f.finished);
+    fireworks.forEach(f => { f.update(); f.draw(); });
+
+    particles = particles.filter(p => p.alpha > 0);
+    particles.forEach(p => { p.update(); p.draw(); });
+
+    ctx.restore();
+
+    // 发射逻辑：第一发生日快乐 云云，后续按顺序循环
+    if (!firstFireworkLaunched) {
+        fireworks.push(new Firework(FIRST_TEXT));
+        firstFireworkLaunched = true;
+    } else {
+        if (random(0, 1) < 0.01) {
+            fireworks.push(new Firework(getSequenceText()));
+        }
+    }
+
+    requestAnimationFrame(animate);
+}
+
+// 启动动画
+animate();
+</script>
+</body>
+</html>
