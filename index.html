@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>生日快乐云云</title>
+    <title>生日快乐yunyun</title>
     <style>
         * {
             margin: 0;
@@ -34,9 +34,17 @@
 
 <script>
 // ===================== 核心配置 🎂 生日祝福专属 =====================
-const FIRST_TEXT = '生日快乐 云云'; // 第一发文字
+const FIRST_TEXT = '生日快乐 云箫'; // 第一发文字
 // 🔥 你指定的全新固定顺序文字
-const SEQUENCE_TEXTS = ['云云', '平安', '喜乐', '顺遂','生日快乐', '云云', '无忧', '开心', '幸福', '云云', '生日快乐'];
+// 🔥 扩充后的祝福文字序列
+const SEQUENCE_TEXTS = [
+  '云箫', '生日快乐','喜乐', '暴富', '顺遂', '云云','生日快乐',
+  '生日快乐', '平安', '幸福', '开心', '云pro', 
+  '云箫', '快乐', '美满', '安康', '生日快乐', '云箫',
+  '云pro', '顺遂', '无忧', '平安', '幸福', '云云', '生日快乐',
+  '云云','开心', '温暖', '云箫',
+  '生日快乐',  '闪耀', '温柔', '云箫','生日快乐'
+];
 let textIndex = 0; // 顺序索引
 let firstFireworkLaunched = false; // 标记第一发是否已发射
 
@@ -291,7 +299,7 @@ function animate() {
 
     ctx.restore();
 
-    // 发射逻辑：第一发生日快乐 云云，后续按顺序循环
+    // 发射逻辑：第一发生日快乐 云箫，后续按顺序循环
     if (!firstFireworkLaunched) {
         fireworks.push(new Firework(FIRST_TEXT));
         firstFireworkLaunched = true;
